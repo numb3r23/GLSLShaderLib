@@ -209,9 +209,9 @@ function init()
 	parameters = 
 	{
 		x: 0, y: 30, z: 0,
-		lEnd: -50,
-		lMin: 70,
-		lMax: 100,
+		bottomEnd: -50,
+		illuMin: 70,
+		illuMax: 100,
 		useCamAsLight: true,
 		color:  "#ffffff",
 		colorA: "#000000",
@@ -241,9 +241,10 @@ function init()
 
 	/* light parameters */
 	var folder2 = gui.addFolder('Lambert Parameters');
-	var objectLightEnd = folder2.add(parameters, 'lEnd').min(-100).max(100).step(1).listen();
-	var objectLightMin = folder2.add(parameters, 'lMin').min(-100).max(100).step(1).listen();
-	var objectLightMax = folder2.add(parameters, 'lMax').min(-100).max(100).step(1).listen();
+	var objectLightEnd = folder2.add(parameters, 'bottomEnd').min(-100).max(100).step(1).listen();
+	this.test = objectLightEnd;
+	var objectLightMin = folder2.add(parameters, 'illuMin').min(-100).max(100).step(1).listen();
+	var objectLightMax = folder2.add(parameters, 'illuMax').min(-100).max(100).step(1).listen();
 	folder2.open();
 
 	objectLightEnd.onChange(function(value) 
@@ -286,9 +287,9 @@ function updateObject()
 	object.material.uniforms.u_diffuse.value = hexToVec3(parameters.color)
 	object.material.uniforms.u_ambient.value = hexToVec3(parameters.colorA)
 
-	object.material.uniforms.u_lightBottomEnd.value = parameters.lEnd * 0.01;
-	object.material.uniforms.u_lightRangeMin.value = parameters.lMin * 0.01;
-	object.material.uniforms.u_lightRangeMax.value = parameters.lMax * 0.01;
+	object.material.uniforms.u_lightBottomEnd.value = parameters.bottomEnd * 0.01;
+	object.material.uniforms.u_lightRangeMin.value = parameters.illuMin * 0.01;
+	object.material.uniforms.u_lightRangeMax.value = parameters.illuMax * 0.01;
 
   object.material.uniforms.u_useCamPos.value = parameters.useCamAsLight? 1.0 : 0.0; 
   
@@ -301,9 +302,9 @@ function resetObjectModified()
 	parameters.z = 0;
 	parameters.color = "#ffffff";
 	parameters.colorA = "#000000";
-	parameters.lEnd = -50,
-	parameters.lMin = 70,
-	parameters.lMax = 100,
+	parameters.bottomEnd = -50,
+	parameters.illuMin = 70,
+	parameters.illuMax = 100,
 
 	parameters.useCamAsLight = true,
 
@@ -317,9 +318,9 @@ function resetObjectLambert()
 	parameters.z = 0;
 	parameters.color = "#ffffff";
 	parameters.colorA = "#000000";
-	parameters.lEnd = 0,
-	parameters.lMin = 0,
-	parameters.lMax = 100,
+	parameters.bottomEnd = 0,
+	parameters.illuMin = 0,
+	parameters.illuMax = 100,
 
 	parameters.useCamAsLight = true,
 
