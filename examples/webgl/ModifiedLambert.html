@@ -241,9 +241,9 @@ function init()
 
 	/* light parameters */
 	var folder2 = gui.addFolder('Lambert Parameters');
-	var objectLightEnd = folder2.add(parameters, 'lEnd').min(-100).max(100).step(1).listen();
-	var objectLightMin = folder2.add(parameters, 'lMin').min(-100).max(100).step(1).listen();
-	var objectLightMax = folder2.add(parameters, 'lMax').min(-100).max(100).step(1).listen();
+	var objectLightEnd = folder2.add(parameters, 'lEnd').name("Bottom").min(-100).max(100).step(1).listen();
+	var objectLightMin = folder2.add(parameters, 'lMin').name("Min").min(-100).max(100).step(1).listen();
+	var objectLightMax = folder2.add(parameters, 'lMax').name("Max").min(-100).max(100).step(1).listen();
 	folder2.open();
 
 	objectLightEnd.onChange(function(value) 
