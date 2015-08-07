@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<title>Modified Lambert (Three.js)</title>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+	<link rel=stylesheet href="css/base.css"/>
+	<style>
+		#info3 {
+			color:#000;
+			position: absolute;
+			top: 0px; 
+			width: 100%;
+			padding: 3px;
+		}
+	</style>
+</head>
+<body>
+
+
+<script src="js/Three.js"></script>
+<script src="js/Detector.js"></script>
+<script src="js/Stats.js"></script>
+<script src="js/OrbitControls.js"></script>
+<script src="js/THREEx.KeyboardState.js"></script>
+<script src="js/THREEx.FullScreen.js"></script>
+<script src="js/THREEx.WindowResize.js"></script>
+
+<script type='text/javascript' src='js/DAT.GUI.min.js'></script>
+
+<!-- jQuery code to display an information button and box when clicked. -->
+<script src="js/jquery-1.9.1.js"></script>
+<script src="js/jquery-ui.js"></script>
+<link rel=stylesheet href="css/jquery-ui.css" />
+<link rel=stylesheet href="css/info.css"/>
+<script src="js/info.js"></script>
+<!-- ------------------------------------------------------------ -->
+
+<div id="ThreeJS" style="position: absolute; left:0px; top:0px"></div>
+
+<!-- ---------------- Custom Shader Code ------------------------ -->
+<script id="vertexShader" type="x-shader/x-vertex">
+uniform vec3 u_camPos;
+uniform float u_useCamPos;
+
+varying vec2 vUv;
+varying float vNDotL;
+varying vec3 vNormal;
+
+void main() 
+{ 
+
+    vUv = uv;
+    vNormal = normal;
+    vNDotL = dot(normal, normalize(mix(vec3(-1.0, 1.5, 1.0), u_camPos.xyz, u_useCamPos)));
+
+	gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+</script>
+
+<!-- fragment shader a.k.a. pixel shader -->
+<script id="fragmentShader" type="x-shader/x-vertex"> 
+uniform vec3 u_diffuse;
+uniform vec3 u_ambient;
+
+uniform float u_lightBottomEnd;
+uniform float u_lightTopEnd;
+uniform float u_lightRangeMin;
+uniform float u_lightRangeMax;
+
+varying vec2 vUv;
+varying float vNDotL;
+varying vec3 vNormal;
+
+void main() 
+{
+
+	float nDotL = vNDotL;
+	nDotL -= u_lightRangeMin;
+	nDotL /= (u_lightRangeMax - u_lightRangeMin);
+	nDotL = clamp(nDotL, 0.0, 1.0);
+  gl_FragColor = vec4(mix(u_ambient, u_diffuse, nDotL), 1.0);
+}  
+</script>
+
+<script>
+/*
+	Three.js "tutorials by example"
+	Author: Lee Stemkoski
+	Date: July 2013 (three.js v59dev)
+ */
+
+// MAIN
+
+// standard global variables
+var container, scene, camera, renderer, controls, stats;
+var keyboard = new THREEx.KeyboardState();
+var clock = new THREE.Clock();
+
+// custom global variables
+var object;
+var parameters;
+var gui;
+
+init();
+animate();
+
+function hexToVec3(hexValue)
+{
+	var col = new THREE.Color(hexValue);
+	return new THREE.Vector3(col.r, col.g, col.b);
+}
+
+// FUNCTIONS 		
+function init() 
+{
+	// SCENE
+	scene = new THREE.Scene();
+	// CAMERA
+	var SCREEN_WIDTH = window.innerWidth, SCREEN_HEIGHT = window.innerHeight;
+	var VIEW_ANGLE = 45, ASPECT = SCREEN_WIDTH / SCREEN_HEIGHT, NEAR = 0.1, FAR = 20000;
+	camera = new THREE.PerspectiveCamera( VIEW_ANGLE, ASPECT, NEAR, FAR);
+	camera.position.set(0,150,400);
+	camera.lookAt(scene.position);	
+	scene.add(camera);
+	
+	// RENDERER
+	if ( Detector.webgl )
+		renderer = new THREE.WebGLRenderer( {antialias:true} );
+	else
+		renderer = new THREE.CanvasRenderer(); 
+
+	renderer.setSize(SCREEN_WIDTH, SCREEN_HEIGHT);
+	renderer.setClearColorHex(0x84b4fa, 1);
+
+	container = document.getElementById( 'ThreeJS' );
+	container.appendChild( renderer.domElement );
+	// EVENTS
+	THREEx.WindowResize(renderer, camera);
+	THREEx.FullScreen.bindKey({ charCode : 'm'.charCodeAt(0) });
+	// CONTROLS
+	controls = new THREE.OrbitControls( camera, renderer.domElement );
+	// STATS
+	stats = new Stats();
+	stats.domElement.style.position = 'absolute';
+	stats.domElement.style.bottom = '0px';
+	stats.domElement.style.zIndex = 100;
+	container.appendChild( stats.domElement );
+
+
+	// LIGHT
+	var light = new THREE.PointLight(0xffffff);
+	light.position.set(-100,150,100);
+	
+	var lightbulbGeometry = new THREE.SphereGeometry( 10, 16, 8 );
+	var lightbulbMaterial = new THREE.MeshBasicMaterial( { color: 0xffffff, transparent: true,  opacity: 0.8, blending: THREE.AdditiveBlending } );
+	var wireMaterial = new THREE.MeshBasicMaterial( { color: 0x000000, wireframe: true } );
+	var materialArray = [lightbulbMaterial, wireMaterial];
+	var lightbulb = THREE.SceneUtils.createMultiMaterialObject( lightbulbGeometry, materialArray );
+	lightbulb.position = light.position;
+	scene.add(lightbulb);
+	scene.add(light);
+
+	// FLOOR
+	var floorTexture = new THREE.ImageUtils.loadTexture( 'images/checkerboard.jpg' );
+	floorTexture.wrapS = floorTexture.wrapT = THREE.RepeatWrapping; 
+	floorTexture.repeat.set( 10, 10 );
+	var floorMaterial = new THREE.MeshBasicMaterial( { map: floorTexture, side: THREE.DoubleSide } );
+	var floorGeometry = new THREE.PlaneGeometry(1000, 1000, 10, 10);
+	var floor = new THREE.Mesh(floorGeometry, floorMaterial);
+	floor.position.y = -100;
+	floor.rotation.x = Math.PI / 2;
+	scene.add(floor);
+
+	////////////
+	// CUSTOM //
+	////////////
+	this.customUniforms = 
+	{
+		u_ambient: 	 	  { type: "v3", value: new THREE.Vector3(0.0, 0.0, 0.0) },
+		u_diffuse: 	 	  { type: "v3", value: new THREE.Vector3(1.0, 1.0, 1.0) },
+		u_lightBottomEnd: { type: "f",  value: -0.5 },
+		u_lightRangeMin:  { type: "f",  value: 0.5 },
+		u_lightRangeMax:  { type: "f",  value: 1.0 },
+		u_camPos: 	 	  { type: "v3", value: new THREE.Vector3(1.0, 0.0, 0.0) },
+		u_useCamPos:      { type: "f",  value: 1.0 },
+	};
+
+	var objectGeometry = new THREE.TorusKnotGeometry( 70, 15, 60, 10, 2, 3 ); //new THREE.SphereGeometry( 100, 50, 50 );
+	this.customMaterial = new THREE.ShaderMaterial( 
+	{
+	    uniforms: customUniforms,
+		vertexShader:   document.getElementById( 'vertexShader'   ).textContent,
+		fragmentShader: document.getElementById( 'fragmentShader' ).textContent,
+		side: THREE.DoubleSide
+	});
+
+	object = new THREE.Mesh( objectGeometry, customMaterial );
+	object.position.set(0,30,0);
+	scene.add(object);
+
+	var axes = new THREE.AxisHelper(10);
+	scene.add(axes);
+
+	gui = new dat.GUI();
+	parameters = 
+	{
+		x: 0, y: 30, z: 0,
+		bottomEnd: -50,
+		illuMin: -50,
+		illuMax: 100,
+		useCamAsLight: true,
+		color:  "#ffffff",
+		colorA: "#b2b2b2",
+		resetLamb: function() { resetObjectLambert() },
+		resetMod: function() { resetObjectModified() },
+		resetTwoTone : function() { resetObjectTwoTone()}
+	};
+	
+	/* Position */
+	var folder1 = gui.addFolder('Position');
+	var objectX = folder1.add( parameters, 'x' ).min(-200).max(200).step(1).listen();
+	var objectY = folder1.add( parameters, 'y' ).min(0).max(100).step(1).listen();
+	var objectZ = folder1.add( parameters, 'z' ).min(-200).max(200).step(1).listen();
+	folder1.open();
+	
+	objectX.onChange(function(value) 
+	{   object.position.x = value;   });
+	objectY.onChange(function(value) 
+	{   object.position.y = value;   });
+	objectZ.onChange(function(value) 
+	{   object.position.z = value;   });
+
+	/* light source */
+	gui.add(parameters, "useCamAsLight").name('Light from Cam').onChange(function(value)
+	{
+	   object.material.uniforms.u_useCamPos.value = value? 1.0 : 0.0; 
+	});
+
+	/* light parameters */
+	var folder2 = gui.addFolder('Lambert Parameters');
+	//var objectLightEnd = folder2.add(parameters, 'bottomEnd').min(-100).max(100).step(1).listen();
+	var objectLightMin = folder2.add(parameters, 'illuMin').min(-100).max(100).step(1).listen();
+	var objectLightMax = folder2.add(parameters, 'illuMax').min(-100).max(100).step(1).listen();
+	folder2.open();
+
+	//objectLightEnd.onChange(function(value) 
+	//{   object.material.uniforms.u_lightBottomEnd.value = value * 0.01; });
+	objectLightMin.onChange(function(value) 
+	{   object.material.uniforms.u_lightRangeMin.value = value * 0.01; });
+	objectLightMax.onChange(function(value) 
+	{   object.material.uniforms.u_lightRangeMax.value = value * 0.01; });
+
+	/* color */
+	var objectColor = gui.addColor( parameters, 'color' ).name('Color High').listen();
+	objectColor.onChange(function(value) // onFinishChange
+	{   
+		object.material.uniforms.u_diffuse.value = hexToVec3(value);   
+	});
+
+	var objectColorA = gui.addColor( parameters, 'colorA' ).name('Color Low').listen();
+	objectColorA.onChange(function(value) // onFinishChange
+	{   
+		object.material.uniforms.u_ambient.value = hexToVec3(value);   
+	});
+	gui.add( parameters, 'resetMod' ).name("Reset Modified");
+	gui.add( parameters, 'resetLamb' ).name("Reset Lambert");
+	gui.add( parameters, 'resetTwoTone').name("Reset 2Tone");
+	
+	gui.open();
+
+	updateObject();
+	
+	
+}
+
+function updateObject()
+{
+	object.material = customMaterial;
+	
+	object.position.x = parameters.x;
+	object.position.y = parameters.y;
+	object.position.z = parameters.z;
+
+	object.material.uniforms.u_diffuse.value = hexToVec3(parameters.color)
+	object.material.uniforms.u_ambient.value = hexToVec3(parameters.colorA)
+
+	object.material.uniforms.u_lightBottomEnd.value = parameters.bottomEnd * 0.01;
+	object.material.uniforms.u_lightRangeMin.value = parameters.illuMin * 0.01;
+	object.material.uniforms.u_lightRangeMax.value = parameters.illuMax * 0.01;
+
+  object.material.uniforms.u_useCamPos.value = parameters.useCamAsLight? 1.0 : 0.0; 
+  
+	}
+
+function resetObjectModified()
+{
+	parameters.x = 0;
+	parameters.y = 30;
+	parameters.z = 0;
+	parameters.color = "#ffffff";
+	parameters.colorA = "#b2b2b2";
+	parameters.bottomEnd = -50,
+	parameters.illuMin = -50,
+	parameters.illuMax = 100,
+
+	parameters.useCamAsLight = true,
+
+	updateObject();
+}
+
+function resetObjectLambert()
+{
+	parameters.x = 0;
+	parameters.y = 30;
+	parameters.z = 0;
+	parameters.color = "#ffffff";
+	parameters.colorA = "#b2b2b2";
+	parameters.bottomEnd = 0,
+	parameters.illuMin = 0,
+	parameters.illuMax = 100,
+
+	parameters.useCamAsLight = true,
+
+	updateObject();
+}
+
+function resetObjectTwoTone()
+{
+	parameters.x = 0;
+	parameters.y = 30;
+	parameters.z = 0;
+	parameters.color = "#ffb400";
+	parameters.colorA = "#5a00ff";
+	parameters.bottomEnd = 0,
+	parameters.illuMin = -76,
+	parameters.illuMax = 100,
+
+	parameters.useCamAsLight = true,
+
+	updateObject();
+}
+function animate() 
+{
+    requestAnimationFrame(animate);
+	render();		
+	update();
+}
+
+function update()
+{
+	controls.update();
+	stats.update();
+}
+
+function render() 
+{
+	object.material.uniforms.u_camPos.value = camera.position;   
+	renderer.render(scene, camera);
+}
+
+</script>
+<div id="info3">written by Sebastian Schaefer <a href="http://www.numb3r23.net">numb3r23.net</a>
+
+</body>
+</html>
