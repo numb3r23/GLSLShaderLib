@@ -46,13 +46,14 @@ uniform float u_useCamPos;
 varying vec2 vUv;
 varying float vNDotL;
 varying vec3 vNormal;
+varying vec3 vLightPos;
 
 void main() 
 { 
-
-    vUv = uv;
-    vNormal = normal;
-    vNDotL = dot(normal, normalize(mix(vec3(-1.0, 1.5, 1.0), u_camPos.xyz, u_useCamPos)));
+  vUv = uv;
+  vNormal = normal;
+  vLightPos = normalize(mix(vec3(-1.0, 1.5, 1.0), u_camPos.xyz, u_useCamPos));
+  vNDotL = dot(normal, vLightPos);
 
 	gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }
@@ -71,11 +72,12 @@ uniform float u_lightRangeMax;
 varying vec2 vUv;
 varying float vNDotL;
 varying vec3 vNormal;
+varying vec3 vLightPos;
 
 void main() 
 {
-
-	float nDotL = vNDotL;
+	//float nDotL = vNDotL;
+	float nDotL = dot(normalize(vLightPos), normalize(vNormal));
 	nDotL -= u_lightRangeMin;
 	nDotL /= (u_lightRangeMax - u_lightRangeMin);
 	nDotL = clamp(nDotL, 0.0, 1.0);
@@ -209,6 +211,8 @@ function init()
 		bottomEnd: -50,
 		illuMin: -50,
 		illuMax: 100,
+		angle1: -50,
+		angle2: 100,
 		useCamAsLight: true,
 		color:  "#ffffff",
 		colorA: "#b2b2b2",
@@ -238,27 +242,24 @@ function init()
 	});
 
 	/* light parameters */
-	var folder2 = gui.addFolder('Lambert Parameters');
-	//var objectLightEnd = folder2.add(parameters, 'bottomEnd').min(-100).max(100).step(1).listen();
-	var objectLightMin = folder2.add(parameters, 'illuMin').min(-100).max(100).step(1).listen();
-	var objectLightMax = folder2.add(parameters, 'illuMax').min(-100).max(100).step(1).listen();
+	var folder2 = gui.addFolder('DuoTone Parameters');
+	var objectLightMin = folder2.add(parameters, 'angle1').min(0).max(180).step(1).listen();
+	var objectLightMax = folder2.add(parameters, 'angle2').min(0).max(180).step(1).listen();
 	folder2.open();
 
-	//objectLightEnd.onChange(function(value) 
-	//{   object.material.uniforms.u_lightBottomEnd.value = value * 0.01; });
 	objectLightMin.onChange(function(value) 
-	{   object.material.uniforms.u_lightRangeMin.value = value * 0.01; });
+	{   object.material.uniforms.u_lightRangeMin.value = value / 90.0  - 1.0; });
 	objectLightMax.onChange(function(value) 
-	{   object.material.uniforms.u_lightRangeMax.value = value * 0.01; });
+	{   object.material.uniforms.u_lightRangeMax.value = value / 90.0 - 1.0; });
 
 	/* color */
-	var objectColor = gui.addColor( parameters, 'color' ).name('Color High').listen();
+	var objectColor = gui.addColor( parameters, 'color' ).name('Color1').listen();
 	objectColor.onChange(function(value) // onFinishChange
 	{   
 		object.material.uniforms.u_diffuse.value = hexToVec3(value);   
 	});
 
-	var objectColorA = gui.addColor( parameters, 'colorA' ).name('Color Low').listen();
+	var objectColorA = gui.addColor( parameters, 'colorA' ).name('Color2').listen();
 	objectColorA.onChange(function(value) // onFinishChange
 	{   
 		object.material.uniforms.u_ambient.value = hexToVec3(value);   

@@ -50,10 +50,11 @@ varying vec3 vLightPos;
 
 void main() 
 { 
-  vUv = uv;
-  vNormal = normal;
-  vLightPos = normalize(mix(vec3(-1.0, 1.5, 1.0), u_camPos.xyz, u_useCamPos));
-  vNDotL = dot(normal, vLightPos);
+
+    vUv = uv;
+    vNormal = normal;
+    vLightPos = normalize(mix(vec3(-1.0, 1.5, 1.0), u_camPos.xyz, u_useCamPos));
+    vNDotL = dot(normal, vLightPos);
 
 	gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }
@@ -65,6 +66,7 @@ uniform vec3 u_diffuse;
 uniform vec3 u_ambient;
 
 uniform float u_lightBottomEnd;
+uniform float u_lightTopEnd;
 uniform float u_lightRangeMin;
 uniform float u_lightRangeMax;
 
@@ -77,14 +79,10 @@ void main()
 {
 	//float nDotL = vNDotL;
 	float nDotL = dot(normalize(vLightPos), normalize(vNormal));
-	nDotL -= u_lightBottomEnd;
-	nDotL /= (1.0 - u_lightBottomEnd);
+	nDotL -= u_lightRangeMin;
+	nDotL /= (u_lightRangeMax - u_lightRangeMin);
 	nDotL = clamp(nDotL, 0.0, 1.0);
-	nDotL = mix(u_lightRangeMin, u_lightRangeMax, nDotL);
-
-	vec3 diffuse = u_diffuse * nDotL;
-
-    gl_FragColor = vec4(u_ambient + diffuse, 1.0);
+  gl_FragColor = vec4(mix(u_ambient, u_diffuse, nDotL), 1.0);
 }  
 </script>
 
@@ -212,14 +210,17 @@ function init()
 	{
 		x: 0, y: 30, z: 0,
 		bottomEnd: -50,
-		illuMin: 70,
+		illuMin: -50,
 		illuMax: 100,
 		useCamAsLight: true,
 		color:  "#ffffff",
-		colorA: "#000000",
+		colorA: "#b2b2b2",
 		resetLamb: function() { resetObjectLambert() },
-		resetMod: function() { resetObjectModified() }
+		resetMod: function() { resetObjectModified() },
+		resetTwoTone : function() { resetObjectTwoTone()},
+		resetIce : function() {resetObjectIce()}
 	};
+	resetObjectModified();
 	
 	/* Position */
 	var folder1 = gui.addFolder('Position');
@@ -243,32 +244,34 @@ function init()
 
 	/* light parameters */
 	var folder2 = gui.addFolder('Lambert Parameters');
-	var objectLightEnd = folder2.add(parameters, 'bottomEnd').min(-100).max(100).step(1).listen();
+	//var objectLightEnd = folder2.add(parameters, 'bottomEnd').min(-100).max(100).step(1).listen();
 	var objectLightMin = folder2.add(parameters, 'illuMin').min(-100).max(100).step(1).listen();
 	var objectLightMax = folder2.add(parameters, 'illuMax').min(-100).max(100).step(1).listen();
 	folder2.open();
 
-	objectLightEnd.onChange(function(value) 
-	{   object.material.uniforms.u_lightBottomEnd.value = value * 0.01; });
+	//objectLightEnd.onChange(function(value) 
+	//{   object.material.uniforms.u_lightBottomEnd.value = value * 0.01; });
 	objectLightMin.onChange(function(value) 
 	{   object.material.uniforms.u_lightRangeMin.value = value * 0.01; });
 	objectLightMax.onChange(function(value) 
 	{   object.material.uniforms.u_lightRangeMax.value = value * 0.01; });
 
 	/* color */
-	var objectColor = gui.addColor( parameters, 'color' ).name('Color (Diffuse)').listen();
+	var objectColor = gui.addColor( parameters, 'color' ).name('Color High').listen();
 	objectColor.onChange(function(value) // onFinishChange
 	{   
 		object.material.uniforms.u_diffuse.value = hexToVec3(value);   
 	});
 
-	var objectColorA = gui.addColor( parameters, 'colorA' ).name('Color (Ambient)').listen();
+	var objectColorA = gui.addColor( parameters, 'colorA' ).name('Color Low').listen();
 	objectColorA.onChange(function(value) // onFinishChange
 	{   
 		object.material.uniforms.u_ambient.value = hexToVec3(value);   
 	});
 	gui.add( parameters, 'resetMod' ).name("Reset Modified");
 	gui.add( parameters, 'resetLamb' ).name("Reset Lambert");
+	gui.add( parameters, 'resetTwoTone').name("Reset 2Tone");
+	gui.add( parameters, 'resetIce').name("Reset Ice");
 	
 	gui.open();
 
@@ -301,10 +304,10 @@ function resetObjectModified()
 	parameters.x = 0;
 	parameters.y = 30;
 	parameters.z = 0;
-	parameters.color = "#ffffff";
-	parameters.colorA = "#000000";
+	parameters.color = "#009850";
+	parameters.colorA = "#6d00aa";
 	parameters.bottomEnd = -50,
-	parameters.illuMin = 70,
+	parameters.illuMin = -1,
 	parameters.illuMax = 100,
 
 	parameters.useCamAsLight = true,
@@ -318,9 +321,57 @@ function resetObjectLambert()
 	parameters.y = 30;
 	parameters.z = 0;
 	parameters.color = "#ffffff";
-	parameters.colorA = "#000000";
+	parameters.colorA = "#b2b2b2";
 	parameters.bottomEnd = 0,
 	parameters.illuMin = 0,
+	parameters.illuMax = 100,
+
+	parameters.useCamAsLight = true,
+
+	updateObject();
+}
+
+function resetObjectTwoTone()
+{
+	parameters.x = 0;
+	parameters.y = 30;
+	parameters.z = 0;
+	parameters.color = "#ffb400";
+	parameters.colorA = "#5a00ff";
+	parameters.bottomEnd = 0,
+	parameters.illuMin = -76,
+	parameters.illuMax = 100,
+
+	parameters.useCamAsLight = true,
+
+	updateObject();
+}
+
+function resetObjectIce()
+{
+	parameters.x = 0;
+	parameters.y = 30;
+	parameters.z = 0;
+	parameters.color = "#ffffff";
+	parameters.colorA = "#07d3ff";
+	parameters.bottomEnd = 0,
+	parameters.illuMin = -1,
+	parameters.illuMax = 100,
+
+	parameters.useCamAsLight = true,
+
+	updateObject();
+}
+
+function resetObjectFlipTone()
+{
+	parameters.x = 0;
+	parameters.y = 30;
+	parameters.z = 0;
+	parameters.color = "#009850";
+	parameters.colorA = "#6d00aa";
+	parameters.bottomEnd = -50,
+	parameters.illuMin = -1,
 	parameters.illuMax = 100,
 
 	parameters.useCamAsLight = true,
