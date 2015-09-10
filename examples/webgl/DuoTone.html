@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<title>Modified Lambert (Three.js)</title>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+	<link rel=stylesheet href="css/base.css"/>
+	<style>
+		#info3 {
+			color:#000;
+			position: absolute;
+			top: 0px; 
+			padding: 3px;
+		}
+	</style>
+</head>
+<body>
+
+
+<script src="js/Three.js"></script>
+<script src="js/Detector.js"></script>
+<script src="js/Stats.js"></script>
+<script src="js/OrbitControls.js"></script>
+<script src="js/THREEx.KeyboardState.js"></script>
+<script src="js/THREEx.FullScreen.js"></script>
+<script src="js/THREEx.WindowResize.js"></script>
+
+<script type='text/javascript' src='js/DAT.GUI.min.js'></script>
+
+<!-- jQuery code to display an information button and box when clicked. -->
+<script src="js/jquery-1.9.1.js"></script>
+<script src="js/jquery-ui.js"></script>
+<link rel=stylesheet href="css/jquery-ui.css" />
+<link rel=stylesheet href="css/info.css"/>
+<script src="js/info.js"></script>
+<!-- ------------------------------------------------------------ -->
+
+<div id="ThreeJS" style="position: absolute; left:0px; top:0px"></div>
+
+<!-- ---------------- Custom Shader Code ------------------------ -->
+<script id="vertexShader" type="x-shader/x-vertex">
+uniform vec3 u_camPos;
+uniform float u_useCamPos;
+
+varying vec2 vUv;
+varying float vNDotL;
+varying vec3 vNormal;
+varying vec3 vLightPos;
+
+void main() 
+{ 
+  vUv = uv;
+  vNormal = normal;
+  vLightPos = normalize(mix(vec3(-1.0, 1.5, 1.0), u_camPos.xyz, u_useCamPos));
+  vNDotL = dot(vNormal, vLightPos);
+
+	gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+</script>
+
+<!-- fragment shader  -->
+<script id="fragmentShader" type="x-shader/x-vertex"> 
+uniform float u_angle1;
+uniform vec3 u_color1;
+uniform float u_angle2;
+uniform vec3 u_color2;
+
+uniform float u_usePerFragmentShading; 
+
+uniform float u_segments;
+uniform float u_useSegments;
+
+varying float vNDotL;
+varying vec3 vNormal;
+varying vec3 vLightPos;
+
+void main() 
+{
+	float nDotL = dot(normalize(vLightPos), normalize(vNormal));
+	nDotL = mix(vNDotL, nDotL, u_usePerFragmentShading);
+	nDotL = smoothstep(u_angle1, u_angle2, nDotL);
+	if (u_useSegments > 0.5)
+	{
+		nDotL = clamp(floor(nDotL * (u_segments))/(u_segments - 1.0), 0.0, 1.0);
+	}
+  gl_FragColor = vec4(mix(u_color1, u_color2, nDotL), 1.0);
+}  
+</script>
+
+<script>
+// standard global variables
+var container, scene, camera, renderer, controls, stats;
+var keyboard = new THREEx.KeyboardState();
+var clock = new THREE.Clock();
+
+// custom global variables
+var object;
+var parameters;
+var gui;
+
+init();
+animate();
+
+function hexToVec3(hexValue)
+{
+	var col = new THREE.Color(hexValue);
+	return new THREE.Vector3(col.r, col.g, col.b);
+}
+
+// FUNCTIONS 		
+function init() 
+{
+	// SCENE
+	scene = new THREE.Scene();
+	// CAMERA
+	var SCREEN_WIDTH = window.innerWidth, SCREEN_HEIGHT = window.innerHeight;
+	var VIEW_ANGLE = 45, ASPECT = SCREEN_WIDTH / SCREEN_HEIGHT, NEAR = 0.1, FAR = 20000;
+	camera = new THREE.PerspectiveCamera( VIEW_ANGLE, ASPECT, NEAR, FAR);
+	camera.position.set(0,150,400);
+	camera.lookAt(scene.position);	
+	scene.add(camera);
+	
+	// RENDERER
+	if ( Detector.webgl )
+		renderer = new THREE.WebGLRenderer( {antialias:true} );
+	else
+		renderer = new THREE.CanvasRenderer(); 
+
+	renderer.setSize(SCREEN_WIDTH, SCREEN_HEIGHT);
+	renderer.setClearColorHex(0x84b4fa, 1);
+
+	container = document.getElementById( 'ThreeJS' );
+	container.appendChild( renderer.domElement );
+	// EVENTS
+	THREEx.WindowResize(renderer, camera);
+	THREEx.FullScreen.bindKey({ charCode : 'm'.charCodeAt(0) });
+	// CONTROLS
+	controls = new THREE.OrbitControls( camera, renderer.domElement );
+	// STATS
+	stats = new Stats();
+	stats.domElement.style.position = 'absolute';
+	stats.domElement.style.bottom = '0px';
+	stats.domElement.style.zIndex = 100;
+	container.appendChild( stats.domElement );
+
+
+	// LIGHT
+	var light = new THREE.PointLight(0xffffff);
+	light.position.set(-100,150,100);
+	
+	var lightbulbGeometry = new THREE.SphereGeometry( 10, 16, 8 );
+	var lightbulbMaterial = new THREE.MeshBasicMaterial( { color: 0xffffff, transparent: true,  opacity: 0.8, blending: THREE.AdditiveBlending } );
+	var wireMaterial = new THREE.MeshBasicMaterial( { color: 0x000000, wireframe: true } );
+	var materialArray = [lightbulbMaterial, wireMaterial];
+	var lightbulb = THREE.SceneUtils.createMultiMaterialObject( lightbulbGeometry, materialArray );
+	lightbulb.position = light.position;
+	scene.add(lightbulb);
+	scene.add(light);
+
+	// FLOOR
+	var floorTexture = new THREE.ImageUtils.loadTexture( 'images/checkerboard.jpg' );
+	floorTexture.wrapS = floorTexture.wrapT = THREE.RepeatWrapping; 
+	floorTexture.repeat.set( 10, 10 );
+	var floorMaterial = new THREE.MeshBasicMaterial( { map: floorTexture, side: THREE.DoubleSide } );
+	var floorGeometry = new THREE.PlaneGeometry(1000, 1000, 10, 10);
+	var floor = new THREE.Mesh(floorGeometry, floorMaterial);
+	floor.position.y = -100;
+	floor.rotation.x = Math.PI / 2;
+	scene.add(floor);
+
+	////////////
+	// CUSTOM //
+	////////////
+	this.customUniforms = 
+	{
+		u_camPos: 	 	  { type: "v3", value: new THREE.Vector3(1.0, 0.0, 0.0) },
+		u_usePerFragmentShading: {type: "f", value: 0.0},
+		u_useCamPos:      { type: "f",  value: 1.0 },
+		u_color1: { type: "v3", value: new THREE.Vector3(0.0, 0.0, 0.0) },
+		u_color2: { type: "v3", value: new THREE.Vector3(1.0, 1.0, 1.0) },
+		u_angle1: { type: "f",  value: 0.5 },
+		u_angle2: { type: "f",  value: 1.0 },
+		u_segments: {type: "f", value: 4.0},
+		u_useSegments: {type: "f", value: 0.0}
+	};
+
+	var objectGeometry = new THREE.TorusKnotGeometry( 70, 15, 60, 10, 2, 3 );
+
+	this.customMaterial = new THREE.ShaderMaterial( 
+	{
+	  uniforms: customUniforms,
+		vertexShader:   document.getElementById( 'vertexShader'   ).textContent,
+		fragmentShader: document.getElementById( 'fragmentShader' ).textContent,
+		side: THREE.DoubleSide
+	});
+
+	object = new THREE.Mesh( objectGeometry, customMaterial );
+	object.position.set(0,30,0);
+	scene.add(object);
+
+	var axes = new THREE.AxisHelper(10);
+	scene.add(axes);
+
+	parameters = 
+	{
+		// light
+		x: 0, y: 30, z: 0,
+		//duotone
+		angle1: 100,
+		angle2: 180,
+		useCamAsLight: true,
+		usePerFragmentShading: true,
+		color1:  "#ffffff",
+		color2: "#b2b2b2",
+		// segments
+		segments: 4,
+		useSegments: false,
+		//callback functions for dat-gui
+		presetLamb: function() { presetDuoToneLambert() },
+		presetMod: function() { presetDuoTone() },
+		presetGMaps: function() {presetDuoToneGMaps()},
+		presetTwoTone: function() { presetDuoToneTwoTone()},
+		presetIce: function() { presetDuoToneIce() },
+	};
+	
+	gui = new dat.GUI();
+
+	/* light source */
+	gui.add(parameters, "useCamAsLight").name('Light from Cam').listen().onChange(function(value)
+	{
+	  object.material.uniforms.u_useCamPos.value = value? 1.0 : 0.0; 
+	});
+
+	/* shading type: gouraud || phong */
+	gui.add(parameters, "usePerFragmentShading").name('ShadePerFragment').listen().onChange(function(value)
+	{
+	  object.material.uniforms.u_usePerFragmentShading.value = value? 1.0 : 0.0; 
+	});
+
+	/* DuoTone - light parameters */
+	var folderLightParam = gui.addFolder('DuoTone Parameters');
+	folderLightParam.open();
+
+	folderLightParam.add(parameters, 'angle1').min(0).max(180).step(1).listen().onChange(function(value) 
+	{   
+		object.material.uniforms.u_angle1.value = value / 90.0  - 1.0; 
+	});
+	folderLightParam.addColor( parameters, 'color1' ).name('Color1').listen().onChange(function(value) // onFinishChange
+	{   
+		object.material.uniforms.u_color1.value = hexToVec3(value);   
+	});
+	
+	folderLightParam.add(parameters, 'angle2').min(0).max(180).step(1).listen().onChange(function(value) 
+	{   
+		object.material.uniforms.u_angle2.value = value / 90.0 - 1.0; 
+	});
+	folderLightParam.addColor( parameters, 'color2' ).name('Color2').listen().onChange(function(value) // onFinishChange
+	{   
+		object.material.uniforms.u_color2.value = hexToVec3(value);   
+	});
+
+	
+	var folderPresets = gui.addFolder('Presets');
+	folderPresets.open();
+
+	folderPresets.add( parameters, 'presetMod' ).name("Reset Modified");
+	folderPresets.add( parameters, 'presetLamb' ).name("Reset Lambert");
+	folderPresets.add( parameters, 'presetGMaps').name("Reset Archi.");
+	folderPresets.add( parameters, 'presetTwoTone').name("Reset 2Tone");
+	folderPresets.add( parameters, 'presetIce').name("Reset Ice");
+	
+	var folderSegments = gui.addFolder('Segments/CEL');
+	folderSegments.open();
+
+	folderSegments.add(parameters, "useSegments").name('UseSegments').listen().onChange(function(value)
+	{
+	  object.material.uniforms.u_useSegments.value = value? 1.0 : 0.0; 
+	});
+	folderSegments.add(parameters, 'segments').name('Segments').min(2).max(23).step(1).listen().onChange(function(value) 
+	{   
+		object.material.uniforms.u_segments.value = value; 
+	});
+	
+	gui.open();
+
+	presetDuoTone();
+}
+
+function updateObject()
+{
+	object.material = customMaterial;
+	
+	object.position.x = parameters.x;
+	object.position.y = parameters.y;
+	object.position.z = parameters.z;
+
+	object.material.uniforms.u_color1.value = hexToVec3(parameters.color1)
+	object.material.uniforms.u_color2.value = hexToVec3(parameters.color2)
+
+	object.material.uniforms.u_angle1.value = parameters.angle1 / 90.0  - 1.0;
+	object.material.uniforms.u_angle2.value = parameters.angle2 / 90.0 - 1.0;
+
+  object.material.uniforms.u_useCamPos.value = parameters.useCamAsLight? 1.0 : 0.0; 
+  object.material.uniforms.u_usePerFragmentShading.value = parameters.usePerFragmentShading? 1.0 : 0.0;
+}
+
+function presetDuoTone()
+{
+	parameters.color1 = "#d9d9d9";
+	parameters.angle1 = 120,
+	parameters.color2 = "#ffffff";
+	parameters.angle2 = 180,
+
+	updateObject();
+}
+
+function presetDuoToneLambert()
+{
+	parameters.color1 = "#b2b2b2";
+	parameters.angle1 = 90,
+	parameters.color2 = "#ffffff";
+	parameters.angle2 = 180,
+
+	updateObject();
+}
+
+function presetDuoToneGMaps()
+{
+	parameters.color1 = "#cdcdd5";
+	parameters.angle1 = 80,
+	parameters.color2 = "#f9f8e9";
+	parameters.angle2 = 180,
+
+	updateObject();
+}
+
+function presetDuoToneTwoTone()
+{
+	parameters.color1 = "#5a00ff";
+	parameters.angle1 = 79,
+	parameters.color2 = "#ffb400";
+	parameters.angle2 = 180,
+
+	updateObject();
+}
+
+function presetDuoToneIce()
+{
+	parameters.color1 = "#00c2ff";
+	parameters.angle1 = 70,
+	parameters.color2 = "#ffffff";
+	parameters.angle2 = 180,
+
+	updateObject();
+}
+
+function animate() 
+{
+  requestAnimationFrame(animate);
+	render();		
+	update();
+}
+
+function update()
+{
+	controls.update();
+	stats.update();
+}
+
+function render() 
+{
+	object.material.uniforms.u_camPos.value = camera.position;   
+	renderer.render(scene, camera);
+}
+
+</script>
+<div id="info3">written by Sebastian Schaefer <a href="http://www.numb3r23.net">numb3r23.net</a>
+
+</body>
+</html>
